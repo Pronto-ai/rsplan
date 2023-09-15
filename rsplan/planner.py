@@ -114,7 +114,9 @@ def _get_optimal_path(
     comparable total length (difference is within length tolerance in meters), we will
     choose the path that has less segments.
     """
-    paths.sort(key=lambda x: x.total_length, reverse=False)
+    len_cost = 1.0
+    cusp_cost = 30.0
+    paths.sort(key=lambda x: len_cost * x.total_length + cusp_cost * x.number_of_cusp_points, reverse=False)
 
     # Choose the second shortest path
     roughly_equivalent_lengths = (
