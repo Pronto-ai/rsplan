@@ -58,7 +58,9 @@ def path(
 
         # Find all Reeds-Shepp paths and choose optimal one
         all_paths = _solve_path(start_pose, runway_start_pose, turn_radius, step_size)
-        path_rs = _get_optimal_path(all_paths, length_tolerance)
+        path_rs, cost = _get_optimal_path(all_paths, length_tolerance)
+        if path_rs is None:
+            return None, None
 
         # Add runway Segment to Path list of Segments
         runway_segment = _calc_runway_segment(
@@ -68,7 +70,9 @@ def path(
     else:
         # Find all Reeds-Shepp paths and choose optimal one
         all_paths = _solve_path(start_pose, end_pose, turn_radius, step_size)
-        path_rs = _get_optimal_path(all_paths, length_tolerance)
+        path_rs, cost = _get_optimal_path(all_paths, length_tolerance)
+        if path_rs is None:
+            return None, None
         segments = path_rs.segments
 
     return primitives.Path(
@@ -77,7 +81,7 @@ def path(
         segments=segments,
         turn_radius=turn_radius,
         step_size=step_size,
-    )
+    ), cost
 
 
 ########################################################################################
@@ -107,6 +111,12 @@ def _solve_path(
     return paths
 
 
+def _get_path_cost(path: primitives.Path):
+    len_cost = 1.0
+    cusp_cost = 1000.0
+    reverse_cost = 100.0
+    return len_cost * path.total_length + cusp_cost * path.number_of_cusp_points + sum([reverse_cost * abs(seg.length) for seg in path.segments if seg.direction == -1])
+
 def _get_optimal_path(
     paths: List[primitives.Path], length_tolerance: float = 2.0
 ) -> primitives.Path:
@@ -114,21 +124,12 @@ def _get_optimal_path(
     comparable total length (difference is within length tolerance in meters), we will
     choose the path that has less segments.
     """
-    len_cost = 1.0
-    cusp_cost = 30.0
-    paths.sort(key=lambda x: len_cost * x.total_length + cusp_cost * x.number_of_cusp_points, reverse=False)
+    paths = [path for path in paths if path.number_of_cusp_points < 3 and path.segments[0].direction == 1]
+    if len(paths) == 0:
+        return None, None
+    paths.sort(key=_get_path_cost, reverse=False)
 
-    # Choose the second shortest path
-    roughly_equivalent_lengths = (
-        paths[1].total_length - paths[0].total_length
-    ) < length_tolerance
-    longer_less_segments = len(paths[1].segments) < len(paths[0].segments)
-    if roughly_equivalent_lengths and longer_less_segments:
-        best_path = paths[1]  # Choose second shortest path because it has less segments
-    else:
-        best_path = paths[0]  # Choose shortest path (> length tolerance shorter than other paths)
-
-    return best_path
+    return paths[0], _get_path_cost(paths[0])
 
 
 def _calc_runway_start_pose(
