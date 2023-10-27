@@ -25,6 +25,7 @@ from typing import List, Literal, Tuple
 import numpy as np
 
 from rsplan import curves, helpers, primitives
+from rsplan.params import *
 
 
 def path(
@@ -87,26 +88,13 @@ def get_valid_paths(
     start_pose: Tuple[float, float, float],
     end_pose: Tuple[float, float, float],
     turn_radius: float,
-    runway_length: float,
     step_size: float,
     max_num_cusp_pts: int,
 ) -> List[primitives.Path]:
-    """Generates a list of Reeds-Shepp paths given start and end points (represented as
-    [x, y, yaw]), turn radius, and step size. The step size is the distance between each
-    point in the list of points (e.g. 0.05m).
-    
-    If the path has no runway, the runway length must be 0.0.
-    
-    If the path has a runway, calculates the runway start pose, creates a Reeds-Shepp
-    path from the given start pose to the runway start pose, and adds a straight Segment
-    to the end of the list of Segments in the Path. The runway Segment is a straightaway
-    intended to improve the final position accuracy of navigation. The runway can either
-    be driven in forward or reverse depending on the sign of the runway length specified
-    and can have a variable length.
+    """Generates a list of Reeds-Shepp paths filtered by various criteria given start and end points 
+    (represented as [x, y, yaw]), turn radius, and step size. The step size is the 
+    distance between each point in the list of points (e.g. 0.05m).
     """
-    if runway_length != 0:  # Path has a runway
-        raise NotImplementedError
-
     # Find all Reeds-Shepp paths and choose optimal one
     all_paths = _solve_path(start_pose, end_pose, turn_radius, step_size)
     paths = _get_sorted_valid_paths(all_paths, max_num_cusp_pts)
@@ -149,10 +137,8 @@ def _solve_path(
 
 
 def _get_path_cost(path: primitives.Path):
-    len_cost = 1.0
-    cusp_cost = 1000.0
-    reverse_cost = 100.0
-    return len_cost * path.total_length + cusp_cost * path.number_of_cusp_points + sum([reverse_cost * abs(seg.length) for seg in path.segments if seg.direction == -1])
+    """Compute path cost"""
+    return LENGTH_COST * path.total_length + CUSP_COST * path.number_of_cusp_points + sum([REV_COST * abs(seg.length) for seg in path.segments if seg.direction == -1])
 
 def _get_optimal_path(
     paths: List[primitives.Path], length_tolerance: float = 2.0
@@ -172,10 +158,16 @@ def _get_optimal_path(
 def _get_sorted_valid_paths(
     paths: List[primitives.Path], max_num_cusp_pts: int
 ) -> List[Tuple[primitives.Path, float]]:
-    max_rev_fraction = 0.5
-    paths = [path for path in paths if (path.number_of_cusp_points <= max_num_cusp_pts 
+    """Return list of valid trails sorted by cost from lowest to highest"""
+    assert max_num_cusp_pts < 3, "max_num_cusp_pts must be less than 3"
+    """ explanation for first filter: 
+        * if max_num_cusp_pts is 1, it's for a y-turn entry because we can approach the backup maneuver in drive or reverse
+        * if max_num_cusp_pts is 2, it's for all other modalities, but since those require approaching only in drive,
+            we can't have only one cusp point, so it's either 0 or 2
+    """
+    paths = [path for path in paths if (path.number_of_cusp_points == 0 or path.number_of_cusp_points == max_num_cusp_pts 
                                         and path.segments[0].direction == 1
-                                        and sum([abs(seg.length) for seg in path.segments if seg.direction == -1]) < max_rev_fraction * path.total_length)]
+                                        and sum([abs(seg.length) for seg in path.segments if seg.direction == -1]) < MAX_REV_FRACTION * path.total_length)]
     paths.sort(key=_get_path_cost, reverse=False)
 
     return [(path, _get_path_cost(path)) for path in paths]
