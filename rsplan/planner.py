@@ -83,6 +83,43 @@ def path(
         step_size=step_size,
     ), cost
 
+def get_valid_paths(
+    start_pose: Tuple[float, float, float],
+    end_pose: Tuple[float, float, float],
+    turn_radius: float,
+    runway_length: float,
+    step_size: float,
+    length_tolerance: float = 2.0,
+) -> List[primitives.Path]:
+    """Generates a list of Reeds-Shepp paths given start and end points (represented as
+    [x, y, yaw]), turn radius, and step size. The step size is the distance between each
+    point in the list of points (e.g. 0.05m).
+    
+    If the path has no runway, the runway length must be 0.0.
+    
+    If the path has a runway, calculates the runway start pose, creates a Reeds-Shepp
+    path from the given start pose to the runway start pose, and adds a straight Segment
+    to the end of the list of Segments in the Path. The runway Segment is a straightaway
+    intended to improve the final position accuracy of navigation. The runway can either
+    be driven in forward or reverse depending on the sign of the runway length specified
+    and can have a variable length.
+    """
+    if runway_length != 0:  # Path has a runway
+        raise NotImplementedError
+
+    # Find all Reeds-Shepp paths and choose optimal one
+    all_paths = _solve_path(start_pose, end_pose, turn_radius, step_size)
+    paths = _get_sorted_valid_paths(all_paths, length_tolerance)
+    if len(paths) == 0:
+        return None
+    ret_paths = [(primitives.Path(
+        start_pose=start_pose,
+        end_pose=end_pose,
+        segments=path[0].segments,
+        turn_radius=turn_radius,
+        step_size=step_size,
+    ), path[1]) for path in paths]
+    return ret_paths
 
 ########################################################################################
 # PATH PLANNING HELPER FUNCTIONS #######################################################
@@ -130,6 +167,18 @@ def _get_optimal_path(
     paths.sort(key=_get_path_cost, reverse=False)
 
     return paths[0], _get_path_cost(paths[0])
+    
+
+def _get_sorted_valid_paths(
+    paths: List[primitives.Path], length_tolerance: float = 2.0
+) -> List[Tuple[primitives.Path, float]]:
+    max_rev_fraction = 0.5
+    paths = [path for path in paths if (path.number_of_cusp_points < 2 
+                                        and path.segments[0].direction == 1
+                                        and sum([abs(seg.length) for seg in path.segments if seg.direction == -1]) < max_rev_fraction * path.total_length)]
+    paths.sort(key=_get_path_cost, reverse=False)
+
+    return [(path, _get_path_cost(path)) for path in paths]
 
 
 def _calc_runway_start_pose(
