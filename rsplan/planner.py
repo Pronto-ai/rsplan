@@ -89,7 +89,7 @@ def get_valid_paths(
     turn_radius: float,
     runway_length: float,
     step_size: float,
-    length_tolerance: float = 2.0,
+    max_num_cusp_pts: int,
 ) -> List[primitives.Path]:
     """Generates a list of Reeds-Shepp paths given start and end points (represented as
     [x, y, yaw]), turn radius, and step size. The step size is the distance between each
@@ -109,7 +109,7 @@ def get_valid_paths(
 
     # Find all Reeds-Shepp paths and choose optimal one
     all_paths = _solve_path(start_pose, end_pose, turn_radius, step_size)
-    paths = _get_sorted_valid_paths(all_paths, length_tolerance)
+    paths = _get_sorted_valid_paths(all_paths, max_num_cusp_pts)
     if len(paths) == 0:
         return None
     ret_paths = [(primitives.Path(
@@ -170,10 +170,10 @@ def _get_optimal_path(
     
 
 def _get_sorted_valid_paths(
-    paths: List[primitives.Path], length_tolerance: float = 2.0
+    paths: List[primitives.Path], max_num_cusp_pts: int
 ) -> List[Tuple[primitives.Path, float]]:
     max_rev_fraction = 0.5
-    paths = [path for path in paths if (path.number_of_cusp_points < 2 
+    paths = [path for path in paths if (path.number_of_cusp_points <= max_num_cusp_pts 
                                         and path.segments[0].direction == 1
                                         and sum([abs(seg.length) for seg in path.segments if seg.direction == -1]) < max_rev_fraction * path.total_length)]
     paths.sort(key=_get_path_cost, reverse=False)
