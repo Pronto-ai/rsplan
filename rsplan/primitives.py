@@ -62,14 +62,15 @@ class Path:
         """Convenience function for decomposing the path waypoints into their components
         (x, y, yaw).
         """
-        x_coords, y_coords, yaw_coords = [], [], []
+        x_coords, y_coords, yaw_coords, direction = [], [], [], []
 
         for pt in self.waypoints():
             x_coords.append(pt.x)
             y_coords.append(pt.y)
             yaw_coords.append(pt.yaw)
+            direction.append(pt.driving_direction)
 
-        return x_coords, y_coords, yaw_coords
+        return x_coords, y_coords, yaw_coords, direction
 
     @functools.lru_cache
     def waypoints(self) -> List[Waypoint]:
