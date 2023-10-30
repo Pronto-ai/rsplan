@@ -165,7 +165,7 @@ def _get_sorted_valid_paths(
         * if max_num_cusp_pts is 2, it's for all other modalities, but since those require approaching only in drive,
             we can't have only one cusp point, so it's either 0 or 2
     """
-    paths = [path for path in paths if (path.number_of_cusp_points == 0 or path.number_of_cusp_points == max_num_cusp_pts 
+    paths = [path for path in paths if ((path.number_of_cusp_points == 0 or path.number_of_cusp_points == max_num_cusp_pts)
                                         and path.segments[0].direction == 1
                                         and sum([abs(seg.length) for seg in path.segments if seg.direction == -1]) < MAX_REV_FRACTION * path.total_length)]
     paths.sort(key=_get_path_cost, reverse=False)
